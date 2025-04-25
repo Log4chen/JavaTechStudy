@@ -1,24 +1,27 @@
 package fun.bitbit;
 
+import fun.bitbit.service.UserService;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 @Slf4j
 @Service
 public class ConsumerService {
     KafkaConsumer<String, String> consumer;
+
+    @Autowired
+    UserService userService;
 
     @PostConstruct
     public void init() {
@@ -60,28 +63,24 @@ public class ConsumerService {
         if (records == null || records.isEmpty()) {
             return;
         }
-        for (ConsumerRecord<String, String> record : records) {
-            try {
-                processRecord(record);
-//                Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-//                TopicPartition topicPartition = new TopicPartition(record.topic(), record.partition());
-//                offsets.put(topicPartition, new OffsetAndMetadata(record.offset() + 1));
-//                // 同步提交
-//                consumer.commitSync(offsets);
-                consumer.commitAsync();
-                log.info("consumer commitSync");
-            } catch (Exception e) {
-                log.error("kafka consumer处理消息异常", e);
+        // 对应 consumer.assign(Collection<TopicPartition>) 订阅了多个partition
+        for (TopicPartition partition : records.partitions()) {
+            List<ConsumerRecord<String, String>> partitionRecords = records.records(partition);
+            long lastProcessedOffset = -1;
+            // 遍历分区中的消息
+            for (ConsumerRecord<String, String> record : partitionRecords) {
+                // 业务处理，如果失败了重试3次，还是失败就进入死信队列，service内部catch异常
+                userService.processRecord(record);
+                // 每条消息处理成功后立即提交偏移量
+                // 优点：精准控制偏移量，避免消息丢失或重复 缺点：频繁提交可能降低吞吐量
+//                consumer.commitSync(Collections.singletonMap(partition, new OffsetAndMetadata(record.offset() + 1)));
+                lastProcessedOffset = record.offset(); // 记录最后一条成功消息的偏移量
             }
-        }
-    }
-
-    private void processRecord(ConsumerRecord<String, String> record) {
-        log.info("topic:{} partition:{} offset:{} timestamp：{} timestampType:{} key:{} value:{}",
-            record.topic(), record.partition(), record.offset(), record.timestamp(), record.timestampType(),
-            record.key(), record.value());
-        for (Header header : record.headers()) {
-            log.info("header, key:{} value:{}", header.key(), Arrays.toString(header.value()));
+            // 整个批次处理成功后提交偏移量
+            // 优点：减少网络流量，提高吞吐量 缺点：如果处理过程中出现宕机，消息会重复处理，需要接口幂等性保证（即使单个消息commit偏移量，也要保幂等）
+            if(lastProcessedOffset != -1) {
+                consumer.commitSync(Collections.singletonMap(partition, new OffsetAndMetadata(lastProcessedOffset + 1)));
+            }
         }
     }
 }
