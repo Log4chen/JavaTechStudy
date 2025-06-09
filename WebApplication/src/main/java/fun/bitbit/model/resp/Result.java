@@ -25,4 +25,8 @@ public class Result<T> {
         this.msg = resultEnum.getDesc();
         this.data = data;
     }
+
+    public static <T> Result<T> success(T data) {
+        return new Result<T>(ResultEnum.SUCCESS, data);
+    }
 }
