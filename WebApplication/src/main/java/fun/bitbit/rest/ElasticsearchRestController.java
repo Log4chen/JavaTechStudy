@@ -18,7 +18,7 @@ import java.util.List;
  * Description:
  * Date: 2024/4/27 16:16
  */
-@RestController
+//@RestController
 @RequestMapping("/elastic")
 public class ElasticsearchRestController extends BaseController {
 

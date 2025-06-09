@@ -1,5 +1,19 @@
 server:
   port: 9090
+  shutdown: graceful  # 开启优雅停机（Spring Boot 2.3+）
+  servlet:
+    context-path: /demo
+  tomcat:
+      min-spare-threads: 10
+      max-threads: 800 # 最大工作线程数，默认200
+      max-connections: 10000 # 最大连接数，Tomcat 7.x默认10000，Tomcat 8.x默认8192
+      connection-timeout: 30000 # 连接超时时间，默认30s
+      accept-count: 200 # 等待队列长度，默认200
 spring:
   profiles:
     active: dev
+  task:
+    execution:
+      shutdown:
+        await-termination: true       # 优雅停机，是否等待任务完成
+#        await-termination-period: 300s # 最大等待时间；不指定超时时间，则无限等待
