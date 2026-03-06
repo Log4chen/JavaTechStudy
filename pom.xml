@@ -34,7 +34,16 @@
         <module>kafka</module>
         <module>MongoDB</module>
         <module>WebApplication</module>
+        <module>MQTT</module>
     </modules>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
 
     <dependencyManagement>
         <dependencies>
